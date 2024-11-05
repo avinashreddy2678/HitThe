@@ -3,10 +3,10 @@ import User from "../Models/User.js";
 import { z } from "zod";
 import bcrypt from "bcrypt"; // Import bcrypt
 import jwt from "jsonwebtoken";
-import { generateVerificationTokenbyEmailandId } from "../libs/generateVerificationTokenbyEmailandId.js";
+import { generateOtp } from "../libs/generateOtp.js";
 import { sendMail } from "../libs/sendMail.js";
-import { getTokenbyToken, getUserbyEmail } from "../libs/getTokenbyToken.js";
 import VerifcationTable from "../Models/VerifcationTable.js";
+import { getOtpVerify, verifyOtp } from "../libs/getOtpVerify.js";
 const router = express.Router();
 
 const userSchema = z.object({
@@ -71,22 +71,16 @@ router.post("/register", async (req, res) => {
       profileDp,
       createdAt: new Date(),
     });
-    // const verifyMail = await generateVerificationTokenbyEmailandId(
-    //   newUser._id,
-    //   newUser.email
-    // );
+    const generatedOtp = await generateOtp(newUser._id, newUser.email);
 
-    const generateOtp=Math.floor(10000 + Math.random() * 90000);
-    await sendMail(email, generateOtp);
-    const token = jwt.sign(
-      { id: newUser._id, email: newUser.email },
-      "Secreat"
-    );
+    await sendMail(email, generatedOtp.Otp);
+
+    const userResponse = { ...newUser._doc };
+    delete userResponse.password;
     // Respond with success
     return res.status(201).json({
-      msg: "User created successfully and verification mail is sent!",
-      user: newUser,
-      token,
+      msg: "User created successfully and verification Otp is sent!",
+      user: userResponse,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -163,12 +157,24 @@ router.post("/login", async (req, res) => {
     if (!existingUser) {
       return res.status(404).json({ msg: "User not Exists" });
     }
+    if (!existingUser.emailVerified) {
+      const generatedOtp = await generateOtp(
+        existingUser._id,
+        existingUser.email
+      );
+
+      await sendMail(email, generatedOtp.Otp);
+      return res
+        .status(400)
+        .json({ msg: "Exists but not verified sent Mail please Verify" });
+    }
+
     bcrypt.compare(password, existingUser.password, (err, result) => {
       if (err) {
-        return res.json({ msg: "something went wrong" });
+        return res.status(400).json({ msg: "something went wrong" });
       }
       if (!result) {
-        return res.json({ msg: "password incorrect" });
+        return res.status(400).json({ msg: "password incorrect" });
       }
       const token = jwt.sign(
         { id: existingUser._id, email: existingUser.email },
@@ -182,107 +188,125 @@ router.post("/login", async (req, res) => {
 });
 
 /**
-* @swagger
-* /user/verify:
-*  get:
-*      summary: Verify user email with token
-*      description: This endpoint verifies a user's email using a token. If the token has expired, a new token is generated and sent to the user's email.
-*      tags:
-*        - Verification
-*      parameters:
-*        - in: query
-*          name: token
-*          schema:
-*            type: string
-*          required: true
-*          description: Verification token sent to the user’s email
-*      responses:
-*        200:
-*          description: Successful email verification or token renewal
-*          content:
-*            application/json:
-*              schema:
-*                type: object
-*                properties:
-*                  msg:
-*                    type: string
-*                    example: "Email verified successfully" # This message will vary depending on the response
-*        400:
-*          description: Token missing or expired
-*          content:
-*            application/json:
-*              schema:
-*                type: object
-*                properties:
-*                  msg:
-*                    type: string
-*                    example: "Token is missing in Database"
-*        500:
-*          description: Internal server error
-*          content:
-*            application/json:
-*              schema:
-*                type: object
-*                properties:
-*                  msg:
-*                    type: string
-*                    example: "Something went wrong"
-
+ * @swagger
+ * /user/verify:
+ *  get:
+ *    summary: Verify user email with OTP
+ *    description: This endpoint verifies a user's email using an OTP. If the OTP has expired, a new one is generated and sent to the user's email. If the OTP is valid, the user's email is marked as verified and a unique user code is generated.
+ *    tags:
+ *      - Verification
+ *    parameters:
+ *      - in: query
+ *        name: email
+ *        schema:
+ *          type: string
+ *        required: true
+ *        description: The user's email address for verification
+ *      - in: query
+ *        name: otp
+ *        schema:
+ *          type: string
+ *        required: true
+ *        description: OTP sent to the user's email for verification
+ *    responses:
+ *      200:
+ *        description: Successful email verification or OTP renewal
+ *        content:
+ *          application/json:
+ *            schema:
+ *              type: object
+ *              properties:
+ *                msg:
+ *                  type: string
+ *                  example: "Email verified successfully"
+ *                user:
+ *                  type: object
+ *                  properties:
+ *                    emailVerified:
+ *                      type: boolean
+ *                      example: true
+ *                    UserCode:
+ *                      type: string
+ *                      example: "A1b2C3d4E5"
+ *      400:
+ *        description: OTP is missing, invalid, or has expired
+ *        content:
+ *          application/json:
+ *            schema:
+ *              type: object
+ *              properties:
+ *                msg:
+ *                  type: string
+ *                  example: "Token is missing in Database"
+ *      500:
+ *        description: Internal server error
+ *        content:
+ *          application/json:
+ *            schema:
+ *              type: object
+ *              properties:
+ *                msg:
+ *                  type: string
+ *                  example: "Something went wrong"
  */
 
 router.get("/verify", async (req, res) => {
   try {
-    const token = req.query.token;
+    const { email, otp } = req.query;
     // console.log(token)
-    const existingToken = await getTokenbyToken(token);
-    if (!existingToken) {
+    const existingOtp = await getOtpVerify(email, otp);
+    if (!existingOtp) {
       return res.json({ msg: "Token is missing in Database" });
     }
-    const hasExpired = (await existingToken.expiresIn) < new Date();
+    const hasExpired = (await existingOtp.expiresIn) < new Date();
     if (hasExpired) {
       // if expires then create new token
-      const verificationToken = await generateVerificationTokenbyEmailandId(
-        existingToken.userId,
-        existingToken.email
+      const verificationOtp = await generateOtp(
+        existingOtp.userId,
+        existingOtp.email
       );
 
-      await sendMail(verificationToken.email, verificationToken.token);
+      await sendMail(verificationOtp.email, verificationOtp.Otp);
       return res.json({
         msg: "Token expired and genereated new token sent to mail",
       });
     }
 
+    const verifiedOtp = await verifyOtp(email, otp);
+    if (!verifiedOtp) {
+      return res.status(400).json({ msg: "Otp is Wrong" });
+    }
     // unique code for user to share
+    if (verifiedOtp) {
+      const characters =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      let result = "";
+      for (let i = 0; i < 10; i++) {
+        result += characters.charAt(
+          Math.floor(Math.random() * characters.length)
+        );
+      }
 
-    const characters =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let result = "";
-    for (let i = 0; i < 10; i++) {
-      result += characters.charAt(
-        Math.floor(Math.random() * characters.length)
+      const existingUser = await User.findOneAndUpdate(
+        {
+          email: existingOtp.email,
+        },
+        {
+          emailVerified: true,
+          UserCode: result,
+        },
+
+        {
+          new: true,
+        }
       );
+      await existingUser.save();
+      await VerifcationTable.deleteOne({ email });
     }
 
-    console.log(result);
-    const existingUser = await User.findOneAndUpdate(
-      {
-        email: existingToken.email,
-      },
-      {
-        emailVerified: true,
-        UserCode: result,
-      },
-
-      {
-        new: true,
-      }
-    );
-    await existingUser.save();
-    console.log(existingUser);
-    if (!existingUser) {
+    if (!existingOtp) {
       return res.json({ msg: "Somethinf went wrong" });
     }
-    await VerifcationTable.deleteOne({ token });
 
     return res.json({ msg: "Email verified successfully" });
   } catch (error) {

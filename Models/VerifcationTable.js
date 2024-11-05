@@ -10,8 +10,8 @@ const VerificationTableSchema = new mongoose.Schema({
     type: mongoose.Types.ObjectId,
     ref: "User",
   },
-  token: {
-    type: String,
+  Otp: {
+    type: Number,
     require: true,
   },
   expiresIn: {

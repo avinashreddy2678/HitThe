@@ -1,20 +1,19 @@
-import jwt from "jsonwebtoken";
 import VerifcationTable from "../Models/VerifcationTable.js";
-export const generateVerificationTokenbyEmailandId = async (id, email) => {
+export const generateOtp = async (id, email) => {
   try {
-    const existingToken = await VerifcationTable.findOne({ email });
-    if (existingToken) {
+    const existingOtp = await VerifcationTable.findOne({ email });
+    if (existingOtp) {
       await VerifcationTable.deleteMany({ email });
     }
     // generating token only with id
-    const token = jwt.sign({ id }, "Secreat");
-    const expiresIn = new Date(new Date().getTime() + 3600 * 1000);
+    const expiresIn = new Date(new Date().getTime() + 300 * 1000);
 
+    const generateOtp = Math.floor(10000 + Math.random() * 90000);
     const generatedVerification = await VerifcationTable.create({
       email: email,
       userId: id,
       expiresIn,
-      token,
+      Otp: generateOtp,
     });
     await generatedVerification.save();
 

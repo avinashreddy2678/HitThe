@@ -21,7 +21,7 @@ const options = {
 
     servers: [
       {
-        url: "http://localhost:4001",
+        url: "http://localhost:4003",
       },
     ],
     components: {
@@ -44,6 +44,6 @@ app.use(Cors());
 app.use(express.json());
 app.use("/user", UserRoute);
 app.use("/Room", AuthRoute, RoomRouter);
-app.listen(process.env.PORT_NUMBER || 4001, () => {
+app.listen(process.env.PORT_NUMBER || 4003, () => {
   console.log(`Server is On Fire`);
 });
