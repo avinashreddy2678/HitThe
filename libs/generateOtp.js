@@ -19,7 +19,7 @@ export const generateOtp = async (id, email) => {
 
     return generatedVerification;
   } catch (error) {
-    console.log(error);
+    console.log(error,"err");
     return null;
   }
 };
