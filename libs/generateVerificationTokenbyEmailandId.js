@@ -8,7 +8,7 @@ export const generateVerificationTokenbyEmailandId = async (id, email) => {
     }
     // generating token only with id
     const token = jwt.sign({ id }, "Secreat");
-    const expiresIn = new Date(new Date().getTime() + 60 * 1000);
+    const expiresIn = new Date(new Date().getTime() + 3600 * 1000);
 
     const generatedVerification = await VerifcationTable.create({
       email: email,

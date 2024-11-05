@@ -13,7 +13,7 @@ const transpoter = nodemailer.createTransport({
   },
 });
 
-export const sendMail = async (email, token) => {
+export const sendMail = async (email, Otp) => {
   try {
     const success = await transpoter.sendMail({
       from: {
@@ -23,11 +23,9 @@ export const sendMail = async (email, token) => {
       to: email,
       subject: "Verify Your Email",
 
-      html: `<div> <h1 style={{display:"flex";justifyContent:"center";alignItems:"center";backgroundColor:"blue"; font-size:"20px"}}>Welcome to servertest</h1> </div> <button> <a href="http://localhost:4001/verify?token=${token}">Verify your account${token}</a> </button> `,
+      html: `<div> <h1 style={{display:"flex";justifyContent:"center";alignItems:"center";backgroundColor:"blue"; font-size:"20px"}}>Welcome to servertest</h1> </div> ${Otp} </button> `,
     });
   } catch (error) {
     console.log(error);
   }
 };
-
-// sendMail(transpoter, mailOptions).catch(console.log(error));

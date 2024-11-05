@@ -71,15 +71,22 @@ router.post("/register", async (req, res) => {
       profileDp,
       createdAt: new Date(),
     });
-    const verifyMail = await generateVerificationTokenbyEmailandId(
-      newUser._id,
-      newUser.email
+    // const verifyMail = await generateVerificationTokenbyEmailandId(
+    //   newUser._id,
+    //   newUser.email
+    // );
+
+    const generateOtp=Math.floor(10000 + Math.random() * 90000);
+    await sendMail(email, generateOtp);
+    const token = jwt.sign(
+      { id: newUser._id, email: newUser.email },
+      "Secreat"
     );
-    await sendMail(email, verifyMail.token);
     // Respond with success
     return res.status(201).json({
       msg: "User created successfully and verification mail is sent!",
       user: newUser,
+      token,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -256,21 +263,22 @@ router.get("/verify", async (req, res) => {
       );
     }
 
+    console.log(result);
     const existingUser = await User.findOneAndUpdate(
       {
         email: existingToken.email,
       },
       {
         emailVerified: true,
-      },
-      {
         UserCode: result,
       },
+
       {
         new: true,
       }
     );
-
+    await existingUser.save();
+    console.log(existingUser);
     if (!existingUser) {
       return res.json({ msg: "Somethinf went wrong" });
     }
