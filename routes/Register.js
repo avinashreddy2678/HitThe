@@ -274,7 +274,7 @@ router.get("/verify", async (req, res) => {
 
     const verifiedOtp = await verifyOtp(email, otp);
     if (!verifiedOtp) {
-      return res.status(400).json({ msg: "Otp is Wrong" });
+      return res.status(204).json({ msg: "Otp is Wrong" });
     }
     // unique code for user to share
     if (verifiedOtp) {
