@@ -21,7 +21,7 @@ const options = {
 
     servers: [
       {
-        url: "http://localhost:4001",
+        url: "https://hitthe.onrender.com",
       },
     ],
     components: {

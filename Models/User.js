@@ -19,6 +19,11 @@ const UserSchema = new mongoose.Schema({
   },
   emailVerified: {
     type: Boolean,
+    default: false,
+  },
+
+  UserCode: {
+    type: String,
   },
   createdAt: {
     type: Date,

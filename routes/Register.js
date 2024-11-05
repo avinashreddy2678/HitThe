@@ -3,6 +3,10 @@ import User from "../Models/User.js";
 import { z } from "zod";
 import bcrypt from "bcrypt"; // Import bcrypt
 import jwt from "jsonwebtoken";
+import { generateVerificationTokenbyEmailandId } from "../libs/generateVerificationTokenbyEmailandId.js";
+import { sendMail } from "../libs/sendMail.js";
+import { getTokenbyToken, getUserbyEmail } from "../libs/getTokenbyToken.js";
+import VerifcationTable from "../Models/VerifcationTable.js";
 const router = express.Router();
 
 const userSchema = z.object({
@@ -67,11 +71,16 @@ router.post("/register", async (req, res) => {
       profileDp,
       createdAt: new Date(),
     });
-
+    const verifyMail = await generateVerificationTokenbyEmailandId(
+      newUser._id,
+      newUser.email
+    );
+    await sendMail(email, verifyMail.token);
     // Respond with success
-    return res
-      .status(201)
-      .json({ msg: "User created successfully!", user: newUser });
+    return res.status(201).json({
+      msg: "User created successfully and verification mail is sent!",
+      user: newUser,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ msg: error.errors });
@@ -160,6 +169,114 @@ router.post("/login", async (req, res) => {
       );
       return res.json({ token });
     });
+  } catch (error) {
+    console.log(error);
+  }
+});
+
+/**
+* @swagger
+* /user/verify:
+*  get:
+*      summary: Verify user email with token
+*      description: This endpoint verifies a user's email using a token. If the token has expired, a new token is generated and sent to the user's email.
+*      tags:
+*        - Verification
+*      parameters:
+*        - in: query
+*          name: token
+*          schema:
+*            type: string
+*          required: true
+*          description: Verification token sent to the user’s email
+*      responses:
+*        200:
+*          description: Successful email verification or token renewal
+*          content:
+*            application/json:
+*              schema:
+*                type: object
+*                properties:
+*                  msg:
+*                    type: string
+*                    example: "Email verified successfully" # This message will vary depending on the response
+*        400:
+*          description: Token missing or expired
+*          content:
+*            application/json:
+*              schema:
+*                type: object
+*                properties:
+*                  msg:
+*                    type: string
+*                    example: "Token is missing in Database"
+*        500:
+*          description: Internal server error
+*          content:
+*            application/json:
+*              schema:
+*                type: object
+*                properties:
+*                  msg:
+*                    type: string
+*                    example: "Something went wrong"
+
+ */
+
+router.get("/verify", async (req, res) => {
+  try {
+    const token = req.query.token;
+    // console.log(token)
+    const existingToken = await getTokenbyToken(token);
+    if (!existingToken) {
+      return res.json({ msg: "Token is missing in Database" });
+    }
+    const hasExpired = (await existingToken.expiresIn) < new Date();
+    if (hasExpired) {
+      // if expires then create new token
+      const verificationToken = await generateVerificationTokenbyEmailandId(
+        existingToken.userId,
+        existingToken.email
+      );
+
+      await sendMail(verificationToken.email, verificationToken.token);
+      return res.json({
+        msg: "Token expired and genereated new token sent to mail",
+      });
+    }
+
+    // unique code for user to share
+
+    const characters =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let result = "";
+    for (let i = 0; i < 10; i++) {
+      result += characters.charAt(
+        Math.floor(Math.random() * characters.length)
+      );
+    }
+
+    const existingUser = await User.findOneAndUpdate(
+      {
+        email: existingToken.email,
+      },
+      {
+        emailVerified: true,
+      },
+      {
+        UserCode: result,
+      },
+      {
+        new: true,
+      }
+    );
+
+    if (!existingUser) {
+      return res.json({ msg: "Somethinf went wrong" });
+    }
+    await VerifcationTable.deleteOne({ token });
+
+    return res.json({ msg: "Email verified successfully" });
   } catch (error) {
     console.log(error);
   }
