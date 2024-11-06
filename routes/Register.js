@@ -258,7 +258,7 @@ router.get("/verify", async (req, res) => {
     if (!existingOtp) {
       return res.json({ msg: "Token is missing in Database" });
     }
-    
+
     const hasExpired = (await existingOtp.expiresIn) < new Date();
     if (hasExpired) {
       // if expires then create new token
@@ -303,20 +303,21 @@ router.get("/verify", async (req, res) => {
       );
       await existingUser.save();
       await VerifcationTable.deleteOne({ email });
+      const token = jwt.sign(
+        { id: existingUser._id, email: existingUser.email },
+        "Secreat"
+      );
+      const userResponse = { ...existingUser._doc };
+      delete userResponse.password;
+
+      return res.json({
+        msg: "Email verified successfully",
+        token,
+        userResponse,
+      });
     }
 
-    const token = jwt.sign(
-      { id: existingUser._id, email: existingUser.email },
-      "Secreat"
-    );
-    const userResponse = { ...existingUser._doc };
-    delete userResponse.password;
-
-    return res.json({
-      msg: "Email verified successfully",
-      token,
-      userResponse,
-    });
+    return res.json({msg:'developer could nt found'})
   } catch (error) {
     console.log(error);
   }
