@@ -307,8 +307,18 @@ router.get("/verify", async (req, res) => {
     if (!existingOtp) {
       return res.json({ msg: "Somethinf went wrong" });
     }
+    const token = jwt.sign(
+      { id: existingUser._id, email: existingUser.email },
+      "Secreat"
+    );
+    const userResponse = { ...existingUser._doc };
+    delete userResponse.password;
 
-    return res.json({ msg: "Email verified successfully" });
+    return res.json({
+      msg: "Email verified successfully",
+      token,
+      userResponse,
+    });
   } catch (error) {
     console.log(error);
   }
